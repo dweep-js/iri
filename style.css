@@ -1,0 +1,118 @@
+@import url('https://fonts.googleapis.com/css2?family=Yeseva+One&display=swap');
+
+
+/* Consolidated body styles for a centered, full-viewport game container */
+body {
+    background-color: #1e1e2e;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh; /* Use 100vh for a contained game */
+    margin: 0;
+    overflow: hidden; /* Prevent scrollbars from game elements */
+    font-family: "Yeseva One", serif;
+}
+
+.heart{
+  background-color : #f38ba8;
+  color:#f38ba8;
+}
+
+/* main body centered */
+.main_body {
+  background-color: #313244;
+  width: 85vw;
+  height: 80vh;
+  color: #11111b;
+  border : 1px solid rgba(138, 113, 168, 0.91);
+  display: flex;
+  flex-direction: column;
+  position: relative; /* CRUCIAL: Enables absolute positioning of children like the ocean and shark */
+  overflow: hidden; /* CRUCIAL: Ensures all absolutely positioned children (like the 50% ocean) do not bleed outside the main body's rectangle, fixing the issue. */
+}
+
+/* header */
+.header {
+   /* From https://css.glass */
+  background: rgba(138, 113, 168, 0.31); 
+  backdrop-filter: blur(6.2px);
+  -webkit-backdrop-filter: blur(6.2px);
+  border: 1px solid rgba(138, 113, 168, 0.91);
+  position: relative;
+  text-align: center;
+  font-family: "Yeseva One", serif;
+  font-weight: 400;
+  height: 15%;
+  color: #fff;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* text with hat */
+.header h1 {
+  display: inline-flex;
+  align-items: flex-start;
+  position: relative;
+  font-size: 2rem;
+  margin: 0;
+  padding: 0;
+}
+
+/* hat positioned above the text */
+.header h1 img {
+  position: absolute;
+  top: -29%;
+  right: 0%;
+  width: 27px;
+  height: auto;
+  transform: rotate(15deg);
+  object-fit: contain;
+  pointer-events: none;
+}
+
+/*obstacles*/
+.tiles{
+  width : 45vw;
+  height : 10vh;
+  background-color : #f38ba8; /* The tiles are pink */
+  transition : none;
+}
+
+#one{
+ margin-bottom : 15vh;
+ align-self : flex-end; 
+}
+
+.hearts{
+  border-width:1vw;
+  border-style : solid;
+  border-color : #f38ba8;
+  width : 7vw;
+  height : 7vw;
+  background-color : #f38ba8;
+  transition: background-color 0.4s linear, opacity 0.4s linear;
+}
+
+.heartscon{
+  position:relative;
+  display : flex;
+  gap : 2vw;
+}
+
+#two{
+  margin-bottom : 15vh
+}
+
+#three{
+  margin-bottom : 15vh;
+  align-self : flex-end; 
+}
+
+/*character*/
+.character{
+    position : absolute;
+    transform : scaleX(-1) translateY(-2vh) translateX(-56vw); 
+    width :10vh;
+    height: auto;
+}
