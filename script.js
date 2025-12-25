@@ -15,7 +15,7 @@ let flashIndex = 0;
 let lives = 3;
 let opacity = 1;
 let currentTile = 0;
-let currentY = -2; // FIXED: Back to -2
+let currentY = -2;
 let currentX = -56;
 let frame = 1;
 let h = 7;
@@ -41,9 +41,13 @@ let sharkStopTime = 0;
 let sceneStarted = false;
 let hasHeartGrown = false;
 
-// --- Character position on shark (BETTER POSITIONED ON SHARK'S HEAD) ---
-let characterOnSharkX = 0; // Far LEFT on shark's head
-let characterOnSharkY = -11; // Sitting LOWER on shark
+// --- Character position on shark ---
+let characterOnSharkX = 0;
+let characterOnSharkY = -11;
+
+// --- IMAGE PRELOADING SYSTEM ---
+let imageCache = {};
+let allImagesLoaded = false;
 
 // Store animation intervals for proper cleanup
 let animationIntervals = {
@@ -61,6 +65,107 @@ let animationIntervals = {
   gift: null,
   sparkles: null,
 };
+
+/* ---------------------- IMAGE PRELOADER ---------------------- */
+function preloadImages() {
+  console.log("Preloading all game images...");
+
+  const imageManifest = {
+    character: {
+      idle: 15, // Only 15 idle frames exist
+      run: 20, // Only 20 run frames exist
+      jump: 30, // Only 30 jump frames exist
+      walk: 20, // Only 20 walk frames exist
+      dead: 15, // Only 15 dead frames exist (not 24!)
+    },
+    shark: {
+      frames: 8,
+    },
+    other: ["./resources/giftspile.png"],
+  };
+
+  let totalImages = 0;
+  let loadedImages = 0;
+  let failedImages = [];
+
+  // Function to load a single image
+  function loadImage(src) {
+    return new Promise((resolve, reject) => {
+      totalImages++;
+      const img = new Image();
+      img.onload = () => {
+        loadedImages++;
+        imageCache[src] = img;
+        console.log(`✓ Loaded: ${src}`);
+        resolve(img);
+      };
+      img.onerror = (err) => {
+        failedImages.push(src);
+        console.warn(`✗ Failed to load: ${src}`);
+        // Don't reject, just continue
+        resolve(null);
+      };
+      img.src = src;
+    });
+  }
+
+  // Load character images
+  const characterPromises = [];
+  for (let anim in imageManifest.character) {
+    for (let i = 1; i <= imageManifest.character[anim]; i++) {
+      const src = `./resources/char/${anim.charAt(0).toUpperCase() + anim.slice(1)} (${i}).png`;
+      characterPromises.push(loadImage(src));
+    }
+  }
+
+  // Load shark images
+  for (let i = 1; i <= imageManifest.shark.frames; i++) {
+    const src = `./resources/shark/Shark${i}.png`;
+    loadImage(src);
+  }
+
+  // Load other images
+  imageManifest.other.forEach((src) => loadImage(src));
+
+  // Set a timeout to continue even if some images fail
+  setTimeout(() => {
+    console.log(`Preloaded ${loadedImages}/${totalImages} images`);
+    if (failedImages.length > 0) {
+      console.warn(`Failed images: ${failedImages.join(", ")}`);
+    }
+    allImagesLoaded = true;
+    // Start idle animation
+    IdleAnim();
+  }, 2000);
+}
+
+/* ---------------------- OPTIMIZED IMAGE GETTER ---------------------- */
+function getImage(src) {
+  // Return cached image or fallback to path
+  if (imageCache[src] && imageCache[src].complete) {
+    return imageCache[src].src;
+  }
+  return src; // Fallback to original path
+}
+
+/* ---------------------- SAFE IMAGE LOADER ---------------------- */
+function loadCharacterImage(animation, frameNum) {
+  // Safety check: don't try to load frames that don't exist
+  const maxFrames = {
+    Idle: 15,
+    Run: 20,
+    Jump: 30,
+    Walk: 20,
+    Dead: 15, // NOT 24!
+  };
+
+  if (frameNum > maxFrames[animation]) {
+    frameNum = ((frameNum - 1) % maxFrames[animation]) + 1; // Loop back to valid range
+  }
+
+  const src = `./resources/char/${animation} (${frameNum}).png`;
+  return getImage(src);
+}
 
 /* ---------------------- TILE CHECK ---------------------- */
 function checkValues() {
@@ -115,7 +220,7 @@ function resetGame() {
   state = 1;
   opacity = 1;
   frame = 1;
-  currentY = -2; // FIXED: Changed back to -2 from -8
+  currentY = -2;
   currentX = -56;
   currentTile = 0;
   sharkFrame = 1;
@@ -130,13 +235,18 @@ function resetGame() {
   hasHeartGrown = false;
 
   // Reset hearts - make them PINK filled SQUARE with correct vw size
+  // 2vw gap between hearts
   for (let i = 0; i < hearts.length; i++) {
     const heart = hearts[i];
 
     // Reset all styles to initial state
-    heart.style.cssText = ""; // Clear all styles
+    heart.style.cssText = "";
 
-    // Set basic heart styles - PINK FILLED SQUARE with vw units (NO HEARTBEAT)
+    // Set basic heart styles - PINK FILLED SQUARE with vw units
+    // Each heart is 7vw wide, with 2vw gap between them
+    // First heart at 2vw, second at 11vw (2 + 7 + 2), third at 20vw (11 + 7 + 2)
+    const heartLeft = i * 9 + 2; // 7vw width + 2vw gap = 9vw
+
     heart.style.cssText = `
       opacity: 1;
       background-color: #f38ba8;
@@ -152,7 +262,7 @@ function resetGame() {
       display: block;
       visibility: visible;
       border-width: 1vw;
-      left: ${i * 9 + 2}vw;
+      left: ${heartLeft}vw;
       top: 2vh;
       border-style: solid;
       border-radius: 0% !important;
@@ -168,7 +278,7 @@ function resetGame() {
   // Reset character
   if (char) {
     char.style.transition = "all 0.5s ease-in-out";
-    char.style.transform = "scaleX(-1) translateY(-2vh) translateX(-56vw)"; // FIXED: Changed from -8vh to -2vh
+    char.style.transform = "scaleX(-1) translateY(-2vh) translateX(-56vw)";
     char.style.width = "15vh";
     char.style.filter = "none";
     char.style.zIndex = "";
@@ -177,7 +287,9 @@ function resetGame() {
     char.style.position = "absolute";
     char.style.left = "";
     char.style.top = "";
-    char.src = "./resources/char/Idle (1).png";
+
+    // Use preloaded image if available
+    char.src = loadCharacterImage("Idle", 1);
 
     if (sharkContainer && sharkContainer.contains(char)) {
       sharkContainer.removeChild(char);
@@ -281,7 +393,7 @@ function reanimateHearts() {
   for (let i = 0; i < hearts.length; i++) {
     const heart = hearts[i];
 
-    // Set to PINK filled SQUARE with vw units (NO HEARTBEAT)
+    // Set to PINK filled SQUARE with vw units
     heart.style.borderColor = "#f38ba8";
     heart.style.backgroundColor = "#f38ba8";
     heart.style.transition = "all 0.6s ease-in-out";
@@ -326,7 +438,9 @@ function clearAllIntervals() {
     sharkInterval = null;
   }
 
-  for (let i = 1; i < 10000; i++) {
+  // Clear any remaining intervals
+  const highestId = setTimeout(() => {}, 0);
+  for (let i = highestId; i >= 0; i--) {
     clearTimeout(i);
     clearInterval(i);
   }
@@ -385,35 +499,33 @@ function createSnow() {
   document.head.appendChild(snowStyle);
 
   function generateSnow() {
-    for (let i = 0; i < 30; i++) {
-      setTimeout(() => {
-        const snowflake = document.createElement("div");
-        snowflake.className = "snowflake";
-        const size = Math.random() * 6 + 2;
-        const left = Math.random() * 100;
-        const duration = Math.random() * 10 + 5;
-        snowflake.style.cssText = `
-          left: ${left}%;
-          width: ${size}px;
-          height: ${size}px;
-          animation-duration: ${duration}s;
-          animation-delay: ${Math.random() * 5}s;
-          opacity: ${Math.random() * 0.7 + 0.3};
-        `;
-        snowContainer.appendChild(snowflake);
+    for (let i = 0; i < 15; i++) {
+      const snowflake = document.createElement("div");
+      snowflake.className = "snowflake";
+      const size = Math.random() * 4 + 2;
+      const left = Math.random() * 100;
+      const duration = Math.random() * 8 + 4;
+      snowflake.style.cssText = `
+        left: ${left}%;
+        width: ${size}px;
+        height: ${size}px;
+        animation-duration: ${duration}s;
+        animation-delay: ${Math.random() * 3}s;
+        opacity: ${Math.random() * 0.5 + 0.3};
+      `;
+      snowContainer.appendChild(snowflake);
 
-        setTimeout(
-          () => {
-            if (snowflake.parentNode) snowflake.remove();
-          },
-          duration * 1000 + 5000,
-        );
-      }, i * 200);
+      setTimeout(
+        () => {
+          if (snowflake.parentNode) snowflake.remove();
+        },
+        duration * 1000 + 3000,
+      );
     }
   }
 
   generateSnow();
-  animationIntervals.snow = setInterval(generateSnow, 5000);
+  animationIntervals.snow = setInterval(generateSnow, 3000);
 }
 
 /* ---------------------- CREATE CHRISTMAS SPARKLES THROUGHOUT GAME ---------------------- */
@@ -474,20 +586,19 @@ function createChristmasSparkles() {
     const sparkle = document.createElement("div");
     sparkle.className = "christmas-sparkle";
 
-    // Random Christmas colors
     const colors = [
-      "#f38ba8", // Pink
-      "#89b4fa", // Blue
-      "#a6e3a1", // Green
-      "#f9e2af", // Yellow
-      "#cba6f7", // Purple
-      "#fab387", // Orange
-      "#f2cdcd", // Light pink
-      "#94e2d5", // Turquoise
+      "#f38ba8",
+      "#89b4fa",
+      "#a6e3a1",
+      "#f9e2af",
+      "#cba6f7",
+      "#fab387",
+      "#f2cdcd",
+      "#94e2d5",
     ];
 
     const color = colors[Math.floor(Math.random() * colors.length)];
-    const size = Math.random() * 5 + 2;
+    const size = Math.random() * 4 + 2;
     const left = Math.random() * 100;
     const top = Math.random() * 100;
     const delay = Math.random() * 2;
@@ -498,14 +609,13 @@ function createChristmasSparkles() {
       width: ${size}px;
       height: ${size}px;
       background: ${color};
-      box-shadow: 0 0 8px ${color}, 0 0 16px ${color}40;
+      box-shadow: 0 0 6px ${color}, 0 0 12px ${color}40;
       animation-delay: ${delay}s;
       opacity: 0;
     `;
 
     sparklesContainer.appendChild(sparkle);
 
-    // Remove sparkle after animation
     setTimeout(
       () => {
         if (sparkle.parentNode) {
@@ -517,16 +627,16 @@ function createChristmasSparkles() {
   }
 
   // Generate initial sparkles
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 10; i++) {
     setTimeout(() => {
       generateSparkle();
-    }, i * 100);
+    }, i * 150);
   }
 
   // Continue generating sparkles
   animationIntervals.sparkles = setInterval(() => {
     generateSparkle();
-  }, 300);
+  }, 500);
 }
 
 /* ---------------------- CREATE OCEAN ---------------------- */
@@ -659,14 +769,13 @@ function createOcean() {
   oceanDiv.appendChild(bubblesContainer);
 
   function createBubbles() {
-    for (let i = 0; i < 10; i++) {
-      setTimeout(() => {
-        const bubble = document.createElement("div");
-        const size = Math.random() * 12 + 3;
-        const left = Math.random() * 100;
-        const duration = Math.random() * 8 + 3;
+    for (let i = 0; i < 6; i++) {
+      const bubble = document.createElement("div");
+      const size = Math.random() * 8 + 3;
+      const left = Math.random() * 100;
+      const duration = Math.random() * 6 + 3;
 
-        bubble.style.cssText = `
+      bubble.style.cssText = `
                     position: absolute;
                     bottom: -10px;
                     left: ${left}%;
@@ -679,37 +788,36 @@ function createOcean() {
                     z-index: 52;
                 `;
 
-        const bubbleStyle = document.createElement("style");
-        bubbleStyle.textContent = `
+      const bubbleStyle = document.createElement("style");
+      bubbleStyle.textContent = `
                     @keyframes bubbleRise {
                         0% {
                             transform: translateY(0) scale(1) translateX(0);
                             opacity: 0.6;
                         }
                         50% {
-                            transform: translateY(-50%) scale(1.1) translateX(${Math.random() * 20 - 10}px);
+                            transform: translateY(-50%) scale(1.1) translateX(${Math.random() * 15 - 7.5}px);
                             opacity: 0.3;
                         }
                         100% {
-                            transform: translateY(-100vh) scale(0.5) translateX(${Math.random() * 20 - 10}px);
+                            transform: translateY(-100vh) scale(0.5) translateX(${Math.random() * 15 - 7.5}px);
                             opacity: 0;
                         }
                     }
                 `;
-        document.head.appendChild(bubbleStyle);
+      document.head.appendChild(bubbleStyle);
 
-        bubblesContainer.appendChild(bubble);
+      bubblesContainer.appendChild(bubble);
 
-        setTimeout(() => {
-          if (bubble.parentNode) {
-            bubble.parentNode.removeChild(bubble);
-          }
-        }, duration * 1000);
-      }, i * 500);
+      setTimeout(() => {
+        if (bubble.parentNode) {
+          bubble.parentNode.removeChild(bubble);
+        }
+      }, duration * 1000);
     }
   }
 
-  animationIntervals.waves = setInterval(createBubbles, 4000);
+  animationIntervals.waves = setInterval(createBubbles, 5000);
   createBubbles();
 
   setTimeout(() => {
@@ -721,7 +829,9 @@ function createOcean() {
 function SharkAnim() {
   if (!gameEnd || !sharkElement) return;
 
-  sharkElement.src = `./resources/shark/Shark${sharkFrame}.png`;
+  // Use preloaded image if available
+  const sharkSrc = getImage(`./resources/shark/Shark${sharkFrame}.png`);
+  sharkElement.src = sharkSrc;
   sharkFrame = sharkFrame < 8 ? sharkFrame + 1 : 1;
 
   if (sharkX > sharkArrivalX) {
@@ -737,7 +847,8 @@ function SharkAnim() {
     sharkContainer.style.transform = `translateY(${sharkY}vh) translateX(${sharkX}vw)`;
 
     if (char.parentNode === sharkContainer) {
-      char.src = "./resources/char/Idle (" + frame + ").png";
+      // Use preloaded idle image with safety check
+      char.src = loadCharacterImage("Idle", frame);
       char.style.transform = `scaleX(-1) translateY(${characterOnSharkY}vh) translateX(${characterOnSharkX}vw)`;
       frame = frame < 15 ? frame + 1 : 1;
     }
@@ -754,7 +865,7 @@ function SharkAnim() {
     }
   }
 
-  sharkInterval = setTimeout(SharkAnim, 80);
+  sharkInterval = setTimeout(SharkAnim, 100);
 }
 
 /* ---------------------- CREATE GIFT PILE ---------------------- */
@@ -769,7 +880,13 @@ function createGiftPile() {
   giftspileElement = document.createElement("img");
   giftspileElement.id = "giftpile";
   giftspileElement.alt = "Christmas Gift Pile - Click to Open";
-  giftspileElement.src = "./resources/giftspile.png";
+
+  // Use preloaded image if available
+  if (imageCache["./resources/giftspile.png"]) {
+    giftspileElement.src = imageCache["./resources/giftspile.png"].src;
+  } else {
+    giftspileElement.src = "./resources/giftspile.png";
+  }
 
   giftspileElement.style.cssText = `
         position: absolute;
@@ -858,7 +975,7 @@ function startGiftAnimation() {
         const rotation = -10 + Math.sin(giftX * 0.03) * 3;
         giftspileElement.style.transform = `scale(1) rotate(${rotation}deg)`;
 
-        animationIntervals.gift = setTimeout(driftGift, 30);
+        animationIntervals.gift = setTimeout(driftGift, 40);
       } else {
         giftspileElement.style.transition = "all 0.5s ease";
         giftspileElement.style.left = "40%";
@@ -890,15 +1007,15 @@ function setupGiftClick(element) {
   element.addEventListener("click", function () {
     console.log("Gift pile clicked!");
 
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 8; i++) {
       setTimeout(() => {
         const sparkle = document.createElement("div");
         sparkle.style.cssText = `
           position: absolute;
           left: ${Math.random() * 100}%;
           top: ${Math.random() * 100}%;
-          width: 10px;
-          height: 10px;
+          width: 8px;
+          height: 8px;
           background: white;
           border-radius: 50%;
           pointer-events: none;
@@ -909,13 +1026,13 @@ function setupGiftClick(element) {
         sparkleStyle.textContent = `
           @keyframes sparkle {
             0% { transform: scale(0); opacity: 1; }
-            50% { transform: scale(2); opacity: 0.7; }
+            50% { transform: scale(1.5); opacity: 0.7; }
             100% { transform: scale(0); opacity: 0; }
         `;
         document.head.appendChild(sparkleStyle);
         sharkContainer.appendChild(sparkle);
         setTimeout(() => sparkle.remove(), 700);
-      }, i * 70);
+      }, i * 100);
     }
 
     element.style.animation = "none";
@@ -1062,19 +1179,19 @@ function createLastSurpriseButton() {
   lastSurpriseButton.addEventListener("mouseover", function () {
     this.style.transform = "translateY(-3px) scale(1.05)";
     this.style.boxShadow = "0 9px 0 #d87093, 0 0 30px rgba(243, 139, 168, 0.9)";
-    this.style.background = "#f59ab0"; /* Slightly lighter red on hover */
+    this.style.background = "#f59ab0";
   });
 
   lastSurpriseButton.addEventListener("mouseout", function () {
     this.style.transform = "translateY(0) scale(1)";
     this.style.boxShadow = "0 6px 0 #d87093, 0 0 20px rgba(243, 139, 168, 0.7)";
-    this.style.background = "#f38ba8"; /* Back to solid red */
+    this.style.background = "#f38ba8";
   });
 
   lastSurpriseButton.addEventListener("mousedown", function () {
     this.style.transform = "translateY(3px)";
     this.style.boxShadow = "0 3px 0 #d87093, 0 0 20px rgba(243, 139, 168, 0.7)";
-    this.style.background = "#e67997"; /* Darker red when pressed */
+    this.style.background = "#e67997";
   });
 
   letterContainer.appendChild(lastSurpriseButton);
@@ -1118,7 +1235,8 @@ function startGameEndScene() {
   mainBody.appendChild(sharkContainer);
 
   sharkElement = document.createElement("img");
-  sharkElement.src = `./resources/shark/Shark1.png`;
+  const sharkImgSrc = getImage(`./resources/shark/Shark1.png`);
+  sharkElement.src = sharkImgSrc;
   sharkElement.id = "shark-element";
   sharkElement.style.cssText = `
         position: relative;
@@ -1289,11 +1407,8 @@ function heartgrow() {
             finalHeart.style.zIndex = "auto";
 
             setTimeout(() => {
-              // Step 3: Final bounce effect - NO HEARTBEAT, JUST STAY THERE
-
-              // NO setTimeout for bounce effect - just stay at scale(1)
-
-              // Show other hearts - SAME SIZE but transparent with blue border - NO HEARTBEAT
+              // Step 3: Show other hearts with BLUE border and 2vw gap
+              // First blue heart at 11vw (2 + 7 + 2), second at 20vw (11 + 7 + 2)
               if (otherHeart1) {
                 otherHeart1.style.cssText = `
                   opacity: 1;
@@ -1310,7 +1425,7 @@ function heartgrow() {
                   display: block;
                   visibility: visible;
                   border-width: 1vw;
-                  left: 11vw;
+                  left: 11vw;  /* 2vw + 7vw + 2vw gap */
                   top: 2vh;
                   border-style: solid;
                   border-radius: 0%;
@@ -1332,7 +1447,7 @@ function heartgrow() {
                   display: block;
                   visibility: visible;
                   border-width: 1vw;
-                  left: 20vw;
+                  left: 20vw;  /* 11vw + 7vw + 2vw gap */
                   top: 2vh;
                   border-style: solid;
                   border-radius: 0%;
@@ -1376,7 +1491,13 @@ function heartgrow() {
 function DeathAnim() {
   if (state != 5 || gameEnd) return;
 
-  char.src = "./resources/char/Dead (" + frame + ").png";
+  // Use safe image loader with loop back for Dead frames (only 15 exist)
+  let deadFrameNum = frame;
+  if (deadFrameNum > 15) {
+    deadFrameNum = ((deadFrameNum - 1) % 15) + 1; // Loop back to 1-15 range
+  }
+
+  char.src = loadCharacterImage("Dead", deadFrameNum);
   char.style.width = "22.5vh";
   char.style.transform =
     "scaleX(1) translateY(" +
@@ -1406,7 +1527,7 @@ function DeathAnim() {
       setTimeout(() => {
         char.style.opacity = "1";
         char.style.width = "15vh";
-        char.src = "./resources/char/Idle (1).png";
+        char.src = loadCharacterImage("Idle", 1);
         char.style.transform =
           "scaleX(1) translateY(65vh) translateX(" + (currentX + 10) + "vw)";
 
@@ -1420,8 +1541,8 @@ function DeathAnim() {
         state = 1;
         opacity = 1;
         char.style.opacity = "1";
-        char.style.transform = "scaleX(-1) translateY(-2vh) translateX(-56vw)"; // FIXED: Changed from -8vh to -2vh
-        currentY = -2; // FIXED: Changed from -8 to -2
+        char.style.transform = "scaleX(-1) translateY(-2vh) translateX(-56vw)";
+        currentY = -2;
         currentX = -56;
         frame = 1;
         char.style.width = "15vh";
@@ -1443,15 +1564,18 @@ function DeathAnim() {
     return;
   }
 
-  animationIntervals.death = setTimeout(DeathAnim, 80);
+  animationIntervals.death = setTimeout(DeathAnim, 100);
 }
 
 /* ---------------------- JUMP ANIMATION ---------------------- */
 function JumpAnim() {
   if (state != 3 || gameEnd) return;
 
-  char.src = "./resources/char/Jump (" + frame + ").png";
-  frame++;
+  // Use safe image loader
+  char.src = loadCharacterImage("Jump", frame);
+
+  // Loop frame within 1-30 range
+  frame = frame < 30 ? frame + 1 : 1;
 
   if (currentTile == 1) {
     char.style.transform =
@@ -1489,16 +1613,18 @@ function JumpAnim() {
     }
   }
 
-  if (frame >= 30) frame = 1;
-  animationIntervals.jump = setTimeout(JumpAnim, 80);
+  animationIntervals.jump = setTimeout(JumpAnim, 100);
 }
 
 /* ---------------------- WALK ANIMATION ---------------------- */
 function WalkAnim() {
   if (state != 4 || gameEnd) return;
 
-  char.src = "./resources/char/Walk (" + frame + ").png";
-  frame++;
+  // Use safe image loader
+  char.src = loadCharacterImage("Walk", frame);
+
+  // Loop frame within 1-20 range
+  frame = frame < 20 ? frame + 1 : 1;
 
   char.style.transform =
     "scaleX(1) translateY(" +
@@ -1506,8 +1632,6 @@ function WalkAnim() {
     "vh) translateX(" +
     (currentX + 10) +
     "vw)";
-
-  if (frame >= 20) frame = 1;
 
   currentX += 0.8;
   if (currentX >= 10) {
@@ -1517,14 +1641,18 @@ function WalkAnim() {
     return;
   }
 
-  animationIntervals.walk = setTimeout(WalkAnim, 80);
+  animationIntervals.walk = setTimeout(WalkAnim, 100);
 }
 
 /* ---------------------- RUN ANIMATION ---------------------- */
 function RunAnim() {
   if (state != 2 || gameEnd) return;
 
-  char.src = "./resources/char/Run (" + frame + ").png";
+  // Use safe image loader
+  char.src = loadCharacterImage("Run", frame);
+
+  // Loop frame within 1-20 range
+  frame = frame < 20 ? frame + 1 : 1;
 
   if (currentTile == 1) {
     char.style.transform =
@@ -1558,16 +1686,18 @@ function RunAnim() {
     }
   }
 
-  frame++;
-  if (frame >= 20) frame = 1;
-  animationIntervals.run = setTimeout(RunAnim, 80);
+  animationIntervals.run = setTimeout(RunAnim, 100);
 }
 
 /* ---------------------- IDLE ANIMATION ---------------------- */
 function IdleAnim() {
   if (state != 1 || gameEnd) return;
 
-  char.src = "./resources/char/Idle (" + frame + ").png";
+  // Use safe image loader
+  char.src = loadCharacterImage("Idle", frame);
+
+  // Loop frame within 1-15 range
+  frame = frame < 15 ? frame + 1 : 1;
 
   if (!gameEnd) {
     if (currentTile == 1) {
@@ -1588,10 +1718,8 @@ function IdleAnim() {
   }
 
   char.style.width = "15vh";
-  frame++;
-  if (frame >= 16) frame = 1;
 
-  animationIntervals.idle = setTimeout(IdleAnim, 80);
+  animationIntervals.idle = setTimeout(IdleAnim, 100);
 }
 
 /* ---------------------- TILE CLICK ---------------------- */
@@ -1609,6 +1737,6 @@ for (let i = 0; i < tiles.length; i++) {
 }
 
 /* ---------------------- START ---------------------- */
-IdleAnim();
-// Start Christmas sparkles at game start
+// Preload images first, then start animations
+preloadImages();
 createChristmasSparkles();
